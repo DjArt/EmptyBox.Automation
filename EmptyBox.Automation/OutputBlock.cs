@@ -4,36 +4,58 @@ using System.Text;
 
 namespace EmptyBox.Automation
 {
-    public class OutputBlock<TInput, TOutput, TState> : IPipelineOutput<TOutput>, IPipelineInputInformer<TOutput, TState>
+    public class OutputBlock<TOutput, TIndexer> : IPipelineOutput<TOutput, TIndexer>
     {
-        public Func<ulong, TInput, TOutput> SendAction { get; protected set; }
-        public Action<IPipelineInput<TOutput>, ulong?, TOutput, TState> InformInputAction { get; protected set; }
-        public event OutputHandleDelegate<TOutput> OutputHandle;
-
-        public OutputBlock(Func<ulong, TInput, TOutput> sendaction, Action<IPipelineInput<TOutput>, ulong?, TOutput, TState> informaction = null)
+        OutputDelegate<TOutput, TIndexer> IPipelineOutput<TOutput, TIndexer>.this[TIndexer index]
         {
-            SendAction = sendaction;
-            InformInputAction = informaction;
+            get
+            {
+                if (!Events.ContainsKey(index))
+                {
+                    Events.Add(index, null);
+                }
+                return Events[index];
+            }
+            set
+            {
+                if (!Events.ContainsKey(index) && value.GetInvocationList().Length > 0)
+                {
+                    Events.Add(index, null);
+                }
+                else if (Events.ContainsKey(index))
+                {
+                    if (value.GetInvocationList().Length == 0)
+                    {
+                        Events.Remove(index);
+                    }
+                    else
+                    {
+                        Events[index] = value;
+                    }
+                }
+            }
         }
 
-        public void Send(ulong taskID, TInput input)
+        private Dictionary<TIndexer, OutputDelegate<TOutput, TIndexer>> Events;
+
+        public OutputBlock()
         {
-            OutputHandle?.Invoke(this, taskID, SendAction.Invoke(taskID, input));
+            Events = new Dictionary<TIndexer, OutputDelegate<TOutput, TIndexer>>();
         }
 
-        public void InformInput(IPipelineInput<TOutput> sender, ulong? taskID, TOutput input, TState state)
+        public void Send(TOutput input, TIndexer index)
         {
-            InformInputAction?.Invoke(sender, taskID, input, state);
+            (this as IPipelineOutput<TOutput, TIndexer>)[index]?.Invoke(this, input, index);
         }
 
-        public void LinkOutput(IPipelineInput<TOutput> input)
+        public void LinkOutput(TIndexer outputIndex, IPipelineInput<TOutput, TIndexer> pipelineInput, TIndexer inputIndex)
         {
-            OutputHandle += input.Input;
+            (this as IPipelineOutput<TOutput, TIndexer>)[outputIndex] += pipelineInput[inputIndex];
         }
 
-        public void UnlinkOutput(IPipelineInput<TOutput> input)
+        public void UnlinkOutput(TIndexer outputIndex, IPipelineInput<TOutput, TIndexer> pipelineInput, TIndexer inputIndex)
         {
-            OutputHandle -= input.Input;
+            (this as IPipelineOutput<TOutput, TIndexer>)[outputIndex] -= pipelineInput[inputIndex];
         }
     }
 }

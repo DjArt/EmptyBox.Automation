@@ -2,10 +2,21 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard1.4</TargetFramework>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>0.0.0.6</Version>
+    <AssemblyVersion>0.0.0.6</AssemblyVersion>
+    <FileVersion>0.0.0.6</FileVersion>
+    <NeutralLanguage>ru</NeutralLanguage>
+    <Authors>Dj Art</Authors>
+    <Company />
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EmptyBox.IO" Version="0.0.1.1" />
+    <Folder Include="Devices\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EmptyBox.IO" Version="0.0.1.12" />
   </ItemGroup>
 
 </Project>

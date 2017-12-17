@@ -5,20 +5,40 @@ using EmptyBox.IO.Network;
 
 namespace EmptyBox.Automation.Network
 {
-    public class ConnectionSocketHandlerWorker : IPipelineInput<IConnectionSocketHandler>, IPipelineOutput<IConnectionSocket>
+    public class ConnectionSocketHandlerWorker : IPipelineInput<IConnectionSocketHandler, EmptyType>,
+                                                 IPipelineOutput<IConnectionSocket, EmptyType>
     {
-        private List<IConnectionSocketHandler> _Handlers;
+        OutputDelegate<IConnectionSocket, EmptyType> IPipelineOutput<IConnectionSocket, EmptyType>.this[EmptyType index]
+        {
+            get
+            {
+                return Output;
+            }
+            set
+            {
+                Output = value;
+            }
+        }
 
-        public event OutputHandleDelegate<IConnectionSocket> OutputHandle;
+        OutputDelegate<IConnectionSocketHandler, EmptyType> IPipelineInput<IConnectionSocketHandler, EmptyType>.this[EmptyType index]
+        {
+            get
+            {
+                return Input;
+            }
+        }
+
+        private List<IConnectionSocketHandler> Handlers;
+        private event OutputDelegate<IConnectionSocket, EmptyType> Output;
 
         public ConnectionSocketHandlerWorker()
         {
-            _Handlers = new List<IConnectionSocketHandler>();
+            Handlers = new List<IConnectionSocketHandler>();
         }
 
-        public async void Input(IPipelineOutput<IConnectionSocketHandler> sender, ulong taskID, IConnectionSocketHandler output)
+        private async void Input(IPipelineOutput<IConnectionSocketHandler, EmptyType> sender, IConnectionSocketHandler output, EmptyType indexer)
         {
-            _Handlers.Add(output);
+            Handlers.Add(output);
             output.ConnectionSocketReceived += Output_ConnectionSocketReceived;
             SocketOperationStatus status = await output.Start();
             switch (status)
@@ -26,7 +46,7 @@ namespace EmptyBox.Automation.Network
                 case SocketOperationStatus.Success:
                     break;
                 default:
-                    _Handlers.Remove(output);
+                    Handlers.Remove(output);
                     output.ConnectionSocketReceived -= Output_ConnectionSocketReceived;
                     break;
             }
@@ -34,7 +54,27 @@ namespace EmptyBox.Automation.Network
 
         private void Output_ConnectionSocketReceived(IConnectionSocketHandler handler, IConnectionSocket socket)
         {
-            OutputHandle?.Invoke(this, 0, socket);
+            Output?.Invoke(this, socket, EmptyType.Empty);
+        }
+
+        public void LinkInput(EmptyType inputIndex, IPipelineOutput<IConnectionSocketHandler, EmptyType> pipelineOutput, EmptyType outputIndex)
+        {
+            pipelineOutput[inputIndex] += (this as IPipelineInput<IConnectionSocketHandler, EmptyType>)[inputIndex];
+        }
+
+        public void UnlinkInput(EmptyType inputIndex, IPipelineOutput<IConnectionSocketHandler, EmptyType> pipelineOutput, EmptyType outputIndex)
+        {
+            pipelineOutput[inputIndex] -= (this as IPipelineInput<IConnectionSocketHandler, EmptyType>)[inputIndex];
+        }
+
+        public void LinkOutput(EmptyType outputIndex, IPipelineInput<IConnectionSocket, EmptyType> pipelineInput, EmptyType inputIndex)
+        {
+            (this as IPipelineOutput<IConnectionSocket, EmptyType>)[outputIndex] += pipelineInput[inputIndex];
+        }
+
+        public void UnlinkOutput(EmptyType outputIndex, IPipelineInput<IConnectionSocket, EmptyType> pipelineInput, EmptyType inputIndex)
+        {
+            (this as IPipelineOutput<IConnectionSocket, EmptyType>)[outputIndex] -= pipelineInput[inputIndex];
         }
     }
 }

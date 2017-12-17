@@ -5,115 +5,132 @@ using System.Text;
 
 namespace EmptyBox.Automation
 {
-    public class LoadbalancerBlock<TInput> : IPipelineInput<TInput>, IPipelineInputInformer<TInput, LoadbalancerBlock<TInput>.ControlPacket>, IPipelineOutput<(int outnum, TInput output)>
+    public sealed class LoadbalancerBlock<TInput> : IPipelineInput<TInput, EmptyType>, IPipelineOutput<TInput, uint>, IPipelineInput<RatioUpdate, uint>
     {
-        public enum ControlState
+        internal sealed class Record
         {
-            SetRatio
+            public uint Ratio;
+            public uint CurrentRatio;
+            public OutputDelegate<TInput, uint> Event;
         }
 
-        public struct ControlPacket
+        OutputDelegate<TInput, uint> IPipelineOutput<TInput, uint>.this[uint index]
         {
-            public ControlState State;
-            public byte[] Ratio;
+            get
+            {
+                if (!Events.ContainsKey(index))
+                {
+                    Events.Add(index, new Record());
+                }
+                return Events[index].Event;
+            }
+            set
+            {
+                if (!Events.ContainsKey(index) && value.GetInvocationList().Length > 0)
+                {
+                    Events.Add(index, new Record() { Event = value });
+                }
+                else if (Events.ContainsKey(index))
+                {
+                    if (Events[index].Ratio == 0 && value.GetInvocationList().Length == 0)
+                    {
+                        Events.Remove(index);
+                    }
+                    else
+                    {
+                        Events[index].Event = value;
+                    }
+                }
+            }
         }
 
-        protected Dictionary<ulong, byte[]> _SettedRatio;
-        protected Dictionary<ulong, byte[]> _CurrentRatio;
-        protected Random _Random;
+        OutputDelegate<TInput, EmptyType> IPipelineInput<TInput, EmptyType>.this[EmptyType index]
+        {
+            get
+            {
+                return Input;
+            }
+        }
 
-        public event OutputHandleDelegate<(int outnum, TInput output)> OutputHandle;
+        OutputDelegate<RatioUpdate, uint> IPipelineInput<RatioUpdate, uint>.this[uint index]
+        {
+            get
+            {
+                return RatioUpdateInput;
+            }
+        }
+
+        private Dictionary<uint, Record> Events;
+        private Random Random;
 
         public LoadbalancerBlock()
         {
-
-            _SettedRatio = new Dictionary<ulong, byte[]>();
-            _CurrentRatio = new Dictionary<ulong, byte[]>();
-            _Random = new Random();
+            Events = new Dictionary<uint, Record>
+            {
+                { 0, new Record() { Ratio = 1, CurrentRatio = 1 } }
+            };
+            Random = new Random();
         }
 
-        public void Input(IPipelineOutput<TInput> sender, ulong taskID, TInput output)
+        private void RatioUpdateInput(IPipelineOutput<RatioUpdate, uint> pipeline, RatioUpdate output, uint index)
         {
-            if (_SettedRatio.ContainsKey(taskID))
+            for (int i0 = 0; i0 < output.Ratio.Length; i0++)
             {
-                if (!_CurrentRatio.ContainsKey(taskID) || _CurrentRatio[taskID].Count(x => x == 0) == _CurrentRatio[taskID].Length)
+                if (Events.ContainsKey((uint)i0))
                 {
-                    _CurrentRatio[taskID] = new byte[_SettedRatio[taskID].Length];
-                    Array.Copy(_SettedRatio[taskID], _CurrentRatio[taskID], _SettedRatio[taskID].Length);
+                    Events[(uint)i0].Ratio = output.Ratio[i0];
+                    Events[(uint)i0].CurrentRatio = Events[(uint)i0].Ratio;
                 }
-                int count = _CurrentRatio[taskID].Count(x => x > 0);
-                int select = _Random.Next(count);
-                bool done = false;
-                int abspos = -1;
-                int relpos = -1;
-                do
+                else
                 {
-                    if (relpos == select)
-                    {
-                        done = true;
-                    }
-                    else
-                    {
-                        abspos++;
-                        if (_CurrentRatio[taskID][abspos] > 0)
-                        {
-                            relpos++;
-                        }
-                    }
+                    Events.Add((uint)i0, new Record() { Ratio = output.Ratio[i0], CurrentRatio = output.Ratio[i0] });
                 }
-                while (!done);
-                _CurrentRatio[taskID][abspos]--;
-                OutputHandle?.Invoke(this, taskID, (abspos, output));
             }
-            else
+        }
+
+        private void Input(IPipelineOutput<TInput, EmptyType> pipeline, TInput output, EmptyType index)
+        {
+            List<uint> keys = Events.Keys.Where(x => Events[x].CurrentRatio > 0).ToList();
+            uint key = keys[Random.Next(keys.Count())];
+            Events[key].CurrentRatio--;
+            if (keys.Count == 1 && Events[key].CurrentRatio == 0)
             {
-                throw new Exception("wow, we not found this taskID");
+                foreach (Record r in Events.Values)
+                {
+                    r.CurrentRatio = r.Ratio;
+                }
             }
+            Events[key].Event?.Invoke(this, output, key);
         }
 
-        public void InformInput(IPipelineInput<TInput> sender, ulong? taskID, TInput input, ControlPacket state)
+        public void LinkInput(EmptyType inputIndex, IPipelineOutput<TInput, EmptyType> pipelineOutput, EmptyType outputIndex)
         {
-            switch(state.State)
-            {
-                case ControlState.SetRatio:
-                    if (state.Ratio == null)
-                    {
-                        if (!_SettedRatio.ContainsKey(taskID.Value))
-                        {
-                            _SettedRatio.Remove(taskID.Value);
-                            _CurrentRatio.Remove(taskID.Value);
-                        }
-                    }
-                    else
-                    {
-                        //Не стоит забывать, что массивы - это ссылочные типы.
-                        _SettedRatio[taskID.Value] = new byte[state.Ratio.Length];
-                        _CurrentRatio[taskID.Value] = new byte[state.Ratio.Length];
-                        Array.Copy(state.Ratio, _CurrentRatio[taskID.Value], state.Ratio.Length);
-                        Array.Copy(state.Ratio, _SettedRatio[taskID.Value], state.Ratio.Length);
-                    }
-                    break;
-            }
+            pipelineOutput[outputIndex] += (this as IPipelineInput<TInput, EmptyType>)[inputIndex];
         }
 
-        public void LinkBalancerInput(IPipelineOutput<TInput> output)
+        public void LinkOutput(uint outputIndex, IPipelineInput<TInput, uint> pipelineInput, uint inputIndex)
         {
-            output.OutputHandle += Input;
+            (this as IPipelineOutput<TInput, uint>)[outputIndex] += pipelineInput[inputIndex];
         }
 
-        public void UninkBalancerInput(IPipelineOutput<TInput> output)
+        public void UnlinkInput(EmptyType inputIndex, IPipelineOutput<TInput, EmptyType> pipelineOutput, EmptyType outputIndex)
         {
-            output.OutputHandle -= Input;
+            pipelineOutput[outputIndex] -= (this as IPipelineInput<TInput, EmptyType>)[inputIndex];
         }
 
-        public void LinkBalancerOutput(IPipelineInput<(int, TInput)> input)
+        public void UnlinkOutput(uint outputIndex, IPipelineInput<TInput, uint> pipelineInput, uint inputIndex)
         {
-            OutputHandle += input.Input;
+            (this as IPipelineOutput<TInput, uint>)[outputIndex] -= pipelineInput[inputIndex];
         }
 
-        public void UninkBalancerOutput(IPipelineInput<(int, TInput)> input)
+        public void LinkInput(uint inputIndex, IPipelineOutput<RatioUpdate, uint> pipelineOutput, uint outputIndex)
         {
-            OutputHandle -= input.Input;
+            pipelineOutput[outputIndex] += (this as IPipelineInput<RatioUpdate, uint>)[inputIndex];
+        }
+
+        public void UnlinkInput(uint inputIndex, IPipelineOutput<RatioUpdate, uint> pipelineOutput, uint outputIndex)
+        {
+            pipelineOutput[outputIndex] -= (this as IPipelineInput<RatioUpdate, uint>)[inputIndex];
         }
     }
 }

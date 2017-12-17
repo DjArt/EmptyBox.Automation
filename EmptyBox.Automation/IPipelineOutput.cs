@@ -4,9 +4,10 @@ using System.Text;
 
 namespace EmptyBox.Automation
 {
-    public delegate void OutputHandleDelegate<TOutput>(IPipelineOutput<TOutput> sender, ulong taskID, TOutput output);
-    public interface IPipelineOutput<TOutput> : IPipeline
+    public interface IPipelineOutput<TOutput, TIndex>
     {
-        event OutputHandleDelegate<TOutput> OutputHandle;
+        OutputDelegate<TOutput, TIndex> this[TIndex index] { get; set; }
+        void LinkOutput(TIndex outputIndex, IPipelineInput<TOutput, TIndex> pipelineInput, TIndex inputIndex);
+        void UnlinkOutput(TIndex outputIndex, IPipelineInput<TOutput, TIndex> pipelineInput, TIndex inputIndex);
     }
 }

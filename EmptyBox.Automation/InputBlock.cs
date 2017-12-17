@@ -4,29 +4,36 @@ using System.Text;
 
 namespace EmptyBox.Automation
 {
-    public class InputBlock<TInput, TState> : IPipelineInput<TInput>, IPipelineOutputInformer<TInput, TState>
+    public class InputBlock<TInput, TIndexer> : IPipelineInput<TInput, TIndexer>
     {
-        public Action<InputBlock<TInput, TState>, IPipelineOutput<TInput>, ulong, TInput> InputAction { get; protected set; }
-        public event InformerOutputHandleDelegate<TInput, TState> InformerOutputHandle;
-
-        public InputBlock(Action<InputBlock<TInput, TState>, IPipelineOutput<TInput>, ulong, TInput> action)
+        OutputDelegate<TInput, TIndexer> IPipelineInput<TInput, TIndexer>.this[TIndexer index]
         {
-            InputAction = action;
+            get
+            {
+                return Input;
+            }
         }
 
-        public void Input(IPipelineOutput<TInput> sender, ulong taskID, TInput output)
+        public Action<IPipelineOutput<TInput, TIndexer>, TInput, TIndexer> EventHandler { get; set; }
+
+        public InputBlock(Action<IPipelineOutput<TInput, TIndexer>, TInput, TIndexer> action)
         {
-            InputAction?.Invoke(this, sender, taskID, output);
+            EventHandler = action;
         }
 
-        public void LinkInput(IPipelineOutput<TInput> output)
+        private void Input(IPipelineOutput<TInput, TIndexer> pipeline, TInput output, TIndexer index)
         {
-            output.OutputHandle += Input;
+            EventHandler?.Invoke(pipeline, output, index);
         }
 
-        public void UnlinkInput(IPipelineOutput<TInput> output)
+        public void LinkInput(TIndexer inputIndex, IPipelineOutput<TInput, TIndexer> pipelineOutput, TIndexer outputIndex)
         {
-            output.OutputHandle -= Input;
+            pipelineOutput[outputIndex] += (this as IPipelineInput<TInput, TIndexer>)[inputIndex];
+        }
+
+        public void UnlinkInput(TIndexer inputIndex, IPipelineOutput<TInput, TIndexer> pipelineOutput, TIndexer outputIndex)
+        {
+            pipelineOutput[outputIndex] -= (this as IPipelineInput<TInput, TIndexer>)[inputIndex];
         }
     }
 }
