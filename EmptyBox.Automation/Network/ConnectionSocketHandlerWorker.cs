@@ -5,20 +5,20 @@ using EmptyBox.IO.Network;
 
 namespace EmptyBox.Automation.Network
 {
-    public sealed class ConnectionSocketHandlerWorker : IPipelineInput<IConnectionSocketHandler>, IPipelineOutput<IConnectionSocket>
+    public sealed class ConnectionSocketHandlerWorker : IPipelineInput<IConnectionListener>, IPipelineOutput<IConnection>
     {
-        event EventHandler<IConnectionSocket> IPipelineOutput<IConnectionSocket>.Output { add => Output += value; remove => Output -= value; }
+        event EventHandler<IConnection> IPipelineOutput<IConnection>.Output { add => Output += value; remove => Output -= value; }
 
-        private List<IConnectionSocketHandler> Handlers;
-        private event EventHandler<IConnectionSocket> Output;
+        private List<IConnectionListener> Handlers;
+        private event EventHandler<IConnection> Output;
 
         public ConnectionSocketHandlerWorker()
         {
-            Handlers = new List<IConnectionSocketHandler>();
+            Handlers = new List<IConnectionListener>();
         }
 
 
-        private async void Input(object sender, IConnectionSocketHandler output)
+        private async void Input(object sender, IConnectionListener output)
         {
             Handlers.Add(output);
             output.ConnectionSocketReceived += Output_ConnectionSocketReceived;
@@ -34,12 +34,12 @@ namespace EmptyBox.Automation.Network
             }
         }
 
-        void IPipelineInput<IConnectionSocketHandler>.Input(object sender, IConnectionSocketHandler output)
+        void IPipelineInput<IConnectionListener>.Input(object sender, IConnectionListener output)
         {
             throw new NotImplementedException();
         }
 
-        private void Output_ConnectionSocketReceived(IConnectionSocketHandler handler, IConnectionSocket socket)
+        private void Output_ConnectionSocketReceived(IConnectionListener handler, IConnection socket)
         {
             Output?.Invoke(this, socket);
         }

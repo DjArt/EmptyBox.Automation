@@ -4,7 +4,7 @@ using EmptyBox.IO.Network;
 
 namespace EmptyBox.Automation.Network
 {
-    public class ConnectionSocketWorker : IPipelineInput<IConnectionSocket>, IPipelineOutput<byte[], IAccessPoint>, IPipelineInput<byte[], IAccessPoint>
+    public class ConnectionSocketWorker : IPipelineInput<IConnection>, IPipelineOutput<byte[], IAccessPoint>, IPipelineInput<byte[], IAccessPoint>
     {
         EventHandler<byte[]> IPipelineOutput<byte[], IAccessPoint>.this[IAccessPoint index]
         {
@@ -23,16 +23,16 @@ namespace EmptyBox.Automation.Network
         }
         EventHandler<byte[]> IPipelineInput<byte[], IAccessPoint>.this[IAccessPoint index] => (object sender, byte[] message) => Input(sender, message, index);
 
-        private List<IConnectionSocket> Sockets;
+        private List<IConnection> Sockets;
         private Dictionary<IAccessPoint, EventHandler<byte[]>> Events;
 
         public ConnectionSocketWorker()
         {
-            Sockets = new List<IConnectionSocket>();
+            Sockets = new List<IConnection>();
             Events = new Dictionary<IAccessPoint, EventHandler<byte[]>>();
         }
 
-        async void IPipelineInput<IConnectionSocket>.Input(object sender, IConnectionSocket output)
+        async void IPipelineInput<IConnection>.Input(object sender, IConnection output)
         {
             Sockets.Add(output);
             output.MessageReceived += Output_MessageReceived;
@@ -50,21 +50,21 @@ namespace EmptyBox.Automation.Network
 
         private async void Input(object sender, byte[] message, IAccessPoint accessPoint)
         {
-            IConnectionSocket connection = Sockets.Find(x => x.RemoteHost == accessPoint);
+            IConnection connection = Sockets.Find(x => x.RemoteHost == accessPoint);
             if (connection != null)
             {
                 await connection.Send(message);
             }
         }
 
-        private void Output_ConnectionInterrupt(IConnectionSocket connection)
+        private void Output_ConnectionInterrupt(IConnection connection)
         {
             Sockets.Remove(connection);
             connection.MessageReceived -= Output_MessageReceived;
             connection.ConnectionInterrupt -= Output_ConnectionInterrupt;
         }
 
-        private void Output_MessageReceived(IConnectionSocket connection, byte[] message)
+        private void Output_MessageReceived(IConnection connection, byte[] message)
         {
             Events[connection.RemoteHost]?.Invoke(this, message);
         }

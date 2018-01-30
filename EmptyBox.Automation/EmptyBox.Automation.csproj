@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="EmptyBox.IO" Version="0.0.1.12" />
+    <PackageReference Include="EmptyBox.IO" Version="0.0.1.13" />
   </ItemGroup>
 
 </Project>
