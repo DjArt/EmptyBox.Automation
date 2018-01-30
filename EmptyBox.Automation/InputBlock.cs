@@ -4,36 +4,18 @@ using System.Text;
 
 namespace EmptyBox.Automation
 {
-    public class InputBlock<TInput, TIndexer> : IPipelineInput<TInput, TIndexer>
+    public class InputBlock<TInput> : IPipelineInput<TInput>
     {
-        OutputDelegate<TInput, TIndexer> IPipelineInput<TInput, TIndexer>.this[TIndexer index]
+        public EventHandler<TInput> Action { get; set; }
+
+        public InputBlock(EventHandler<TInput> action)
         {
-            get
-            {
-                return Input;
-            }
+            Action = action;
         }
 
-        public Action<IPipelineOutput<TInput, TIndexer>, TInput, TIndexer> EventHandler { get; set; }
-
-        public InputBlock(Action<IPipelineOutput<TInput, TIndexer>, TInput, TIndexer> action)
+        void IPipelineInput<TInput>.Input(object sender, TInput output)
         {
-            EventHandler = action;
-        }
-
-        private void Input(IPipelineOutput<TInput, TIndexer> pipeline, TInput output, TIndexer index)
-        {
-            EventHandler?.Invoke(pipeline, output, index);
-        }
-
-        public void LinkInput(TIndexer inputIndex, IPipelineOutput<TInput, TIndexer> pipelineOutput, TIndexer outputIndex)
-        {
-            pipelineOutput[outputIndex] += (this as IPipelineInput<TInput, TIndexer>)[inputIndex];
-        }
-
-        public void UnlinkInput(TIndexer inputIndex, IPipelineOutput<TInput, TIndexer> pipelineOutput, TIndexer outputIndex)
-        {
-            pipelineOutput[outputIndex] -= (this as IPipelineInput<TInput, TIndexer>)[inputIndex];
+            Action?.Invoke(sender, output);
         }
     }
 }

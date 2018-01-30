@@ -6,7 +6,7 @@ namespace EmptyBox.Automation
 {
     public class OutputBlock<TOutput, TIndexer> : IPipelineOutput<TOutput, TIndexer>
     {
-        OutputDelegate<TOutput, TIndexer> IPipelineOutput<TOutput, TIndexer>.this[TIndexer index]
+        EventHandler<TOutput> IPipelineOutput<TOutput, TIndexer>.this[TIndexer index]
         {
             get
             {
@@ -36,26 +36,16 @@ namespace EmptyBox.Automation
             }
         }
 
-        private Dictionary<TIndexer, OutputDelegate<TOutput, TIndexer>> Events;
+        private Dictionary<TIndexer, EventHandler<TOutput>> Events;
 
         public OutputBlock()
         {
-            Events = new Dictionary<TIndexer, OutputDelegate<TOutput, TIndexer>>();
+            Events = new Dictionary<TIndexer, EventHandler<TOutput>>();
         }
 
         public void Send(TOutput input, TIndexer index)
         {
-            (this as IPipelineOutput<TOutput, TIndexer>)[index]?.Invoke(this, input, index);
-        }
-
-        public void LinkOutput(TIndexer outputIndex, IPipelineInput<TOutput, TIndexer> pipelineInput, TIndexer inputIndex)
-        {
-            (this as IPipelineOutput<TOutput, TIndexer>)[outputIndex] += pipelineInput[inputIndex];
-        }
-
-        public void UnlinkOutput(TIndexer outputIndex, IPipelineInput<TOutput, TIndexer> pipelineInput, TIndexer inputIndex)
-        {
-            (this as IPipelineOutput<TOutput, TIndexer>)[outputIndex] -= pipelineInput[inputIndex];
+            (this as IPipelineOutput<TOutput, TIndexer>)[index]?.Invoke(this, input);
         }
     }
 }

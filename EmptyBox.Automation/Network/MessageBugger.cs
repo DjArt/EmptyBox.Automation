@@ -11,10 +11,10 @@ namespace EmptyBox.Automation.Network
 {
     //"Как назовёшь корабль, так он и поплывёт." (Капитан Врунгель)
 
-    public class MessageBugger : IPipelineInput<byte[], MessageBuggerIndexer>,
-                                 IPipelineOutput<byte[], MessageBuggerIndexer>,
-                                 IPipelineInput<MessageBuggerControl, byte>,
-                                 IPipelineOutput<MessageBuggerControl, byte>
+    public class MessageBugger<TIndexer> : IPipelineInput<byte[], MessageBuggerIndexer, TIndexer>,
+                                 IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer>,
+                                 IPipelineInput<MessageBuggerControl>,
+                                 IPipelineOutput<MessageBuggerControl>
     {
         enum PacketID : byte
         {
@@ -43,81 +43,74 @@ namespace EmptyBox.Automation.Network
             public byte[] Data;
         }
 
-        OutputDelegate<MessageBuggerControl, byte> IPipelineOutput<MessageBuggerControl, byte>.this[byte index]
+        EventHandler<byte[]> IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer>.this[MessageBuggerIndexer index0, TIndexer index1]
         {
             get
             {
-                return null;
-            }
-            set
-            {
-
-            }
-        }
-
-        OutputDelegate<MessageBuggerControl, byte> IPipelineInput<MessageBuggerControl, byte>.this[byte index]
-        {
-            get
-            {
-                return null;
-            }
-        }
-
-        OutputDelegate<byte[], MessageBuggerIndexer> IPipelineOutput<byte[], MessageBuggerIndexer>.this[MessageBuggerIndexer index]
-        {
-            get
-            {
-                switch (index)
+                switch (index0)
                 {
                     default:
                     case MessageBuggerIndexer.Raw:
-                        return RawMessagesOutput;
+                        if (!RawMessagesOutput.ContainsKey(index1))
+                        {
+                            RawMessagesOutput.Add(index1, null);
+                        }
+                        return RawMessagesOutput[index1];
                     case MessageBuggerIndexer.Splitted:
-                        return SplittedMessagesOutput;
+                        if (!SplittedMessagesOutput.ContainsKey(index1))
+                        {
+                            SplittedMessagesOutput.Add(index1, null);
+                        }
+                        return SplittedMessagesOutput[index1];
                 }
             }
             set
             {
-                switch (index)
+                switch (index0)
                 {
                     default:
                     case MessageBuggerIndexer.Raw:
-                        RawMessagesOutput = value;
+                        RawMessagesOutput[index1] = value;
                         break;
                     case MessageBuggerIndexer.Splitted:
-                        SplittedMessagesOutput = value;
+                        SplittedMessagesOutput[index1] = value;
                         break;
                 }
             }
         }
 
-        OutputDelegate<byte[], MessageBuggerIndexer> IPipelineInput<byte[], MessageBuggerIndexer>.this[MessageBuggerIndexer index]
+        EventHandler<byte[]> IPipelineInput<byte[], MessageBuggerIndexer, TIndexer>.this[MessageBuggerIndexer index0, TIndexer index1]
         {
             get
             {
-                switch (index)
+                switch (index0)
                 {
                     default:
                     case MessageBuggerIndexer.Raw:
-                        return RawMessagesInput;
+                        return (object sender, byte[] message) => RawMessagesInput(sender, message, index1);
                     case MessageBuggerIndexer.Splitted:
-                        return SplittedMessagesInput;
+                        return (object sender, byte[] message) => SplittedMessagesInput(sender, message, index1);
                 }
             }
         }
-        
+
+        event EventHandler<MessageBuggerControl> IPipelineOutput<MessageBuggerControl>.Output { add => ControlOutput += value; remove => ControlOutput -= value; }
+
         private BinarySerializer Serializer;
-        private Dictionary<ulong, Dictionary<uint, byte[]>> ID2Packet;
-        private Dictionary<ulong, Header> ID2Header;
-        private event OutputDelegate<byte[], MessageBuggerIndexer> SplittedMessagesOutput;
-        private event OutputDelegate<byte[], MessageBuggerIndexer> RawMessagesOutput;
+        private Dictionary<TIndexer, Dictionary<ulong, Dictionary<uint, byte[]>>> ID2Packet;
+        private Dictionary<TIndexer, Dictionary<ulong, Header>> ID2Header;
+        private Dictionary<TIndexer, EventHandler<byte[]>> SplittedMessagesOutput;
+        private Dictionary<TIndexer, EventHandler<byte[]>> RawMessagesOutput;
+        private event EventHandler<MessageBuggerControl> ControlOutput;
 
         public uint PacketSize { get; set; }
 
         public MessageBugger(BinarySerializer serializer, uint packetsize)
         {
-            ID2Packet = new Dictionary<ulong, Dictionary<uint, byte[]>>();
-            ID2Header = new Dictionary<ulong, Header>();
+            ID2Packet = new Dictionary<TIndexer, Dictionary<ulong, Dictionary<uint, byte[]>>>();
+            ID2Header = new Dictionary<TIndexer, Dictionary<ulong, Header>>();
+            SplittedMessagesOutput = new Dictionary<TIndexer, EventHandler<byte[]>>();
+            RawMessagesOutput = new Dictionary<TIndexer, EventHandler<byte[]>>();
             Serializer = serializer;
             if (packetsize < Serializer.GetLength(new Message()) + Serializer.GetLength(new Header()))
             {
@@ -126,85 +119,97 @@ namespace EmptyBox.Automation.Network
             PacketSize = packetsize;
         }
 
-        private void SplittedMessagesInput(IPipelineOutput<byte[], MessageBuggerIndexer> sender, byte[] output, MessageBuggerIndexer index)
+
+        private void SplittedMessagesInput(object sender, byte[] message, TIndexer index)
         {
-            Message packet = Serializer.Deserialize<Message>(output);
+            Message packet = Serializer.Deserialize<Message>(message);
             switch (packet.ID)
             {
                 case PacketID.PacketWithoutHeader:
-                    RawMessagesOutput?.Invoke(this, packet.Data, MessageBuggerIndexer.Raw);
+                    RawMessagesOutput[index]?.Invoke(this, packet.Data);
                     break;
                 case PacketID.Header:
                     Header header = Serializer.Deserialize<Header>(packet.Data);
-                    if (ID2Header.ContainsKey(header.SequenceID))
+                    if (ID2Header[index].ContainsKey(header.SequenceID))
                     {
-                        (this as IPipelineOutput<MessageBuggerControl, byte>)[0]?.Invoke(this, new MessageBuggerControl() { State = MessageBuggerControlStates.DublicatePacket, SequenceID = header.SequenceID }, 0);
+                        (this as IPipelineOutput<MessageBuggerControl, byte>)[0]?.Invoke(this, new MessageBuggerControl() { State = MessageBuggerControlStates.DublicatePacket, SequenceID = header.SequenceID });
                     }
                     else
                     {
-                        ID2Header.Add(header.SequenceID, header);
-                        CheckPackets(header.SequenceID);
+                        ID2Header[index].Add(header.SequenceID, header);
+                        CheckPackets(header.SequenceID, index);
                     }
                     break;
                 case PacketID.Packet:
                     Packet packet0 = Serializer.Deserialize<Packet>(packet.Data);
-                    if (ID2Packet.ContainsKey(packet0.SequenceID))
+                    if (ID2Packet[index].ContainsKey(packet0.SequenceID))
                     {
-                        if (ID2Packet[packet0.SequenceID].ContainsKey(packet0.Part))
+                        if (ID2Packet[index][packet0.SequenceID].ContainsKey(packet0.Part))
                         {
-                            (this as IPipelineOutput<MessageBuggerControl, byte>)[0]?.Invoke(this, new MessageBuggerControl() { State = MessageBuggerControlStates.DublicatePacket, SequenceID = packet0.SequenceID }, 0);
+                            (this as IPipelineOutput<MessageBuggerControl, byte>)[0]?.Invoke(this, new MessageBuggerControl() { State = MessageBuggerControlStates.DublicatePacket, SequenceID = packet0.SequenceID });
                         }
                         else
                         {
-                            ID2Packet[packet0.SequenceID].Add(packet0.Part, packet0.Data);
-                            CheckPackets(packet0.SequenceID);
+                            ID2Packet[index][packet0.SequenceID].Add(packet0.Part, packet0.Data);
+                            CheckPackets(packet0.SequenceID, index);
                         }
                     }
                     else
                     {
-                        ID2Packet.Add(packet0.SequenceID, new Dictionary<uint, byte[]>());
-                        ID2Packet[packet0.SequenceID].Add(packet0.Part, packet0.Data);
-                        CheckPackets(packet0.SequenceID);
+                        ID2Packet[index].Add(packet0.SequenceID, new Dictionary<uint, byte[]>());
+                        ID2Packet[index][packet0.SequenceID].Add(packet0.Part, packet0.Data);
+                        CheckPackets(packet0.SequenceID, index);
                     }
                     break;
             }
         }
 
-        private void CheckPackets(ulong id)
+        private void CheckPackets(ulong id, TIndexer index)
         {
-            if (ID2Header.ContainsKey(id) && ID2Packet.ContainsKey(id))
+            if (ID2Header[index].ContainsKey(id) && ID2Packet[index].ContainsKey(id))
             {
-                if (ID2Packet[id].Keys.Count == ID2Header[id].PartsCount)
+                if (ID2Packet[index][id].Keys.Count == ID2Header[index][id].PartsCount)
                 {
                     List<byte> pool = new List<byte>(4096);
-                    pool.AddRange(ID2Header[id].Data);
-                    for (uint i0 = 0; i0 < ID2Header[id].PartsCount; i0++)
+                    pool.AddRange(ID2Header[index][id].Data);
+                    for (uint i0 = 0; i0 < ID2Header[index][id].PartsCount; i0++)
                     {
-                        pool.AddRange(ID2Packet[id][i0]);
+                        pool.AddRange(ID2Packet[index][id][i0]);
                     }
-                    ID2Header.Remove(id);
-                    ID2Packet.Remove(id);
-                    RawMessagesOutput?.Invoke(this, pool.ToArray(), MessageBuggerIndexer.Raw);
+                    ID2Header[index].Remove(id);
+                    ID2Packet[index].Remove(id);
+                    RawMessagesOutput[index]?.Invoke(this, pool.ToArray());
                 }
             }
         }
 
-        private void RawMessagesInput(IPipelineOutput<byte[], MessageBuggerIndexer> sender, byte[] output, MessageBuggerIndexer index)
+        private void RawMessagesInput(object sender, byte[] message, TIndexer index)
         {
             uint length = Serializer.GetLength(new Message());
-            if (length + output.Length <= PacketSize)
+            if (length + message.Length <= PacketSize)
             {
-                SplittedMessagesOutput?.Invoke(this, Serializer.Serialize(new Message() { ID = PacketID.PacketWithoutHeader, Data = output }), MessageBuggerIndexer.Splitted);
+                SplittedMessagesOutput[index]?.Invoke
+                (
+                    this,
+                    Serializer.Serialize
+                    (
+                        new Message()
+                        {
+                            ID = PacketID.PacketWithoutHeader,
+                            Data = message
+                        }
+                    )
+                );
             }
             else
             {
-                IEnumerable<byte> pool = output;
+                IEnumerable<byte> pool = message;
                 uint headerLength = Serializer.GetLength(new Header());
                 uint packetLength = Serializer.GetLength(new Packet());
                 uint messageLength = Serializer.GetLength(new Message());
                 uint header_size = PacketSize - headerLength - messageLength;
                 uint packet_size = PacketSize - packetLength - messageLength;
-                uint parts_count = (uint)Math.Ceiling((double)(output.Length - header_size) / PacketSize);
+                uint parts_count = (uint)Math.Ceiling((double)(message.Length - header_size) / PacketSize);
                 Message head = new Message() { ID = PacketID.Header };
                 Header header = new Header() { PartsCount = parts_count };
                 if (header_size > 0)
@@ -217,7 +222,7 @@ namespace EmptyBox.Automation.Network
                     header.Data = new byte[0];
                 }
                 head.Data = Serializer.Serialize(header);
-                SplittedMessagesOutput?.Invoke(this, Serializer.Serialize(head), MessageBuggerIndexer.Splitted);
+                SplittedMessagesOutput[index]?.Invoke(this, Serializer.Serialize(head));
                 for (uint i0 = 0; i0 < parts_count; i0++)
                 {
                     Message packet0 = new Message()
@@ -230,49 +235,14 @@ namespace EmptyBox.Automation.Network
                         })
                     };
                     pool = pool.Skip((int)packet_size);
-                    SplittedMessagesOutput?.Invoke(this, Serializer.Serialize(packet0), MessageBuggerIndexer.Splitted);
+                    SplittedMessagesOutput[index]?.Invoke(this, Serializer.Serialize(packet0));
                 }
             }
         }
 
-        public void LinkInput(MessageBuggerIndexer inputIndex, IPipelineOutput<byte[], MessageBuggerIndexer> pipelineOutput, MessageBuggerIndexer outputIndex)
+        void IPipelineInput<MessageBuggerControl>.Input(object sender, MessageBuggerControl output)
         {
-            pipelineOutput[outputIndex] += (this as IPipelineInput<byte[], MessageBuggerIndexer>)[inputIndex];
-        }
-
-        public void UnlinkInput(MessageBuggerIndexer inputIndex, IPipelineOutput<byte[], MessageBuggerIndexer> pipelineOutput, MessageBuggerIndexer outputIndex)
-        {
-            pipelineOutput[outputIndex] -= (this as IPipelineInput<byte[], MessageBuggerIndexer>)[inputIndex];
-        }
-
-        public void LinkInput(byte inputIndex, IPipelineOutput<MessageBuggerControl, byte> pipelineOutput, byte outputIndex)
-        {
-            pipelineOutput[outputIndex] += (this as IPipelineInput<MessageBuggerControl, byte>)[inputIndex];
-        }
-
-        public void UnlinkInput(byte inputIndex, IPipelineOutput<MessageBuggerControl, byte> pipelineOutput, byte outputIndex)
-        {
-            pipelineOutput[outputIndex] -= (this as IPipelineInput<MessageBuggerControl, byte>)[inputIndex];
-        }
-
-        public void LinkOutput(MessageBuggerIndexer outputIndex, IPipelineInput<byte[], MessageBuggerIndexer> pipelineInput, MessageBuggerIndexer inputIndex)
-        {
-            (this as IPipelineOutput<byte[], MessageBuggerIndexer>)[outputIndex] += pipelineInput[inputIndex];
-        }
-
-        public void UnlinkOutput(MessageBuggerIndexer outputIndex, IPipelineInput<byte[], MessageBuggerIndexer> pipelineInput, MessageBuggerIndexer inputIndex)
-        {
-            (this as IPipelineOutput<byte[], MessageBuggerIndexer>)[outputIndex] -= pipelineInput[inputIndex];
-        }
-
-        public void LinkOutput(byte outputIndex, IPipelineInput<MessageBuggerControl, byte> pipelineInput, byte inputIndex)
-        {
-            (this as IPipelineOutput<MessageBuggerControl, byte>)[outputIndex] += pipelineInput[inputIndex];
-        }
-
-        public void UnlinkOutput(byte outputIndex, IPipelineInput<MessageBuggerControl, byte> pipelineInput, byte inputIndex)
-        {
-            (this as IPipelineOutput<MessageBuggerControl, byte>)[outputIndex] -= pipelineInput[inputIndex];
+            throw new NotImplementedException();
         }
     }
 }

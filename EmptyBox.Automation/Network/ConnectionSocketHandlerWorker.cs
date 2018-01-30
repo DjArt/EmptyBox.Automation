@@ -5,38 +5,20 @@ using EmptyBox.IO.Network;
 
 namespace EmptyBox.Automation.Network
 {
-    public class ConnectionSocketHandlerWorker : IPipelineInput<IConnectionSocketHandler, EmptyType>,
-                                                 IPipelineOutput<IConnectionSocket, EmptyType>
+    public sealed class ConnectionSocketHandlerWorker : IPipelineInput<IConnectionSocketHandler>, IPipelineOutput<IConnectionSocket>
     {
-        OutputDelegate<IConnectionSocket, EmptyType> IPipelineOutput<IConnectionSocket, EmptyType>.this[EmptyType index]
-        {
-            get
-            {
-                return Output;
-            }
-            set
-            {
-                Output = value;
-            }
-        }
-
-        OutputDelegate<IConnectionSocketHandler, EmptyType> IPipelineInput<IConnectionSocketHandler, EmptyType>.this[EmptyType index]
-        {
-            get
-            {
-                return Input;
-            }
-        }
+        event EventHandler<IConnectionSocket> IPipelineOutput<IConnectionSocket>.Output { add => Output += value; remove => Output -= value; }
 
         private List<IConnectionSocketHandler> Handlers;
-        private event OutputDelegate<IConnectionSocket, EmptyType> Output;
+        private event EventHandler<IConnectionSocket> Output;
 
         public ConnectionSocketHandlerWorker()
         {
             Handlers = new List<IConnectionSocketHandler>();
         }
 
-        private async void Input(IPipelineOutput<IConnectionSocketHandler, EmptyType> sender, IConnectionSocketHandler output, EmptyType indexer)
+
+        private async void Input(object sender, IConnectionSocketHandler output)
         {
             Handlers.Add(output);
             output.ConnectionSocketReceived += Output_ConnectionSocketReceived;
@@ -52,29 +34,14 @@ namespace EmptyBox.Automation.Network
             }
         }
 
+        void IPipelineInput<IConnectionSocketHandler>.Input(object sender, IConnectionSocketHandler output)
+        {
+            throw new NotImplementedException();
+        }
+
         private void Output_ConnectionSocketReceived(IConnectionSocketHandler handler, IConnectionSocket socket)
         {
-            Output?.Invoke(this, socket, EmptyType.Empty);
-        }
-
-        public void LinkInput(EmptyType inputIndex, IPipelineOutput<IConnectionSocketHandler, EmptyType> pipelineOutput, EmptyType outputIndex)
-        {
-            pipelineOutput[inputIndex] += (this as IPipelineInput<IConnectionSocketHandler, EmptyType>)[inputIndex];
-        }
-
-        public void UnlinkInput(EmptyType inputIndex, IPipelineOutput<IConnectionSocketHandler, EmptyType> pipelineOutput, EmptyType outputIndex)
-        {
-            pipelineOutput[inputIndex] -= (this as IPipelineInput<IConnectionSocketHandler, EmptyType>)[inputIndex];
-        }
-
-        public void LinkOutput(EmptyType outputIndex, IPipelineInput<IConnectionSocket, EmptyType> pipelineInput, EmptyType inputIndex)
-        {
-            (this as IPipelineOutput<IConnectionSocket, EmptyType>)[outputIndex] += pipelineInput[inputIndex];
-        }
-
-        public void UnlinkOutput(EmptyType outputIndex, IPipelineInput<IConnectionSocket, EmptyType> pipelineInput, EmptyType inputIndex)
-        {
-            (this as IPipelineOutput<IConnectionSocket, EmptyType>)[outputIndex] -= pipelineInput[inputIndex];
+            Output?.Invoke(this, socket);
         }
     }
 }

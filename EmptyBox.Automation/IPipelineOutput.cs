@@ -4,10 +4,18 @@ using System.Text;
 
 namespace EmptyBox.Automation
 {
+    public interface IPipelineOutput<TOutput>
+    {
+        event EventHandler<TOutput> Output;
+    }
+
     public interface IPipelineOutput<TOutput, TIndex>
     {
-        OutputDelegate<TOutput, TIndex> this[TIndex index] { get; set; }
-        void LinkOutput(TIndex outputIndex, IPipelineInput<TOutput, TIndex> pipelineInput, TIndex inputIndex);
-        void UnlinkOutput(TIndex outputIndex, IPipelineInput<TOutput, TIndex> pipelineInput, TIndex inputIndex);
+        EventHandler<TOutput> this[TIndex index] { get; set; }
+    }
+
+    public interface IPipelineOutput<TOutput, TIndex0, TIndex1>
+    {
+        EventHandler<TOutput> this[TIndex0 index0, TIndex1 index1] { get; set; }
     }
 }
