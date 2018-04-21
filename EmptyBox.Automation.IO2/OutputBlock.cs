@@ -43,9 +43,13 @@ namespace EmptyBox.Automation
             Events = new Dictionary<TIndexer, EventHandler<TOutput>>();
         }
 
+        event Action<IPipelineOutput<TOutput, TIndexer>, TOutput, TIndexer> IPipelineOutput<TOutput, TIndexer>.Output { add => Output += value; remove => Output -= value; }
+        private event Action<IPipelineOutput<TOutput, TIndexer>, TOutput, TIndexer> Output;
+
         public void Send(TOutput input, TIndexer index)
         {
             (this as IPipelineOutput<TOutput, TIndexer>)[index]?.Invoke(this, input);
+            Output?.Invoke(this, input, index);
         }
     }
 }

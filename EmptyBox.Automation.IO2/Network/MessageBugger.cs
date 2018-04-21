@@ -16,33 +16,36 @@ namespace EmptyBox.Automation.Network
                                  IPipelineInput<MessageBuggerControl>,
                                  IPipelineOutput<MessageBuggerControl>
     {
-        enum PacketID : byte
+        #region Private structs
+        private enum PacketID : byte
         {
             Header = 0,
             Packet = 1,
             PacketWithoutHeader = 2
         }
 
-        struct Message
+        private struct Message
         {
             public PacketID ID;
             public byte[] Data;
         }
 
-        struct Header
+        private struct Header
         {
             public ulong SequenceID;
             public uint PartsCount;
             public byte[] Data;
         }
 
-        struct Packet
+        private struct Packet
         {
             public ulong SequenceID;
             public uint Part;
             public byte[] Data;
         }
+        #endregion
 
+        #region IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer> interface properties
         EventHandler<byte[]> IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer>.this[MessageBuggerIndexer index0, TIndexer index1]
         {
             get
@@ -79,32 +82,39 @@ namespace EmptyBox.Automation.Network
             }
         }
 
+        event Action<IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer>, byte[], MessageBuggerIndexer, TIndexer> IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer>.Output { add => Output += value; remove => Output -= value; }
+        #endregion
+
+        #region IPipelineInput<byte[], MessageBuggerIndexer, TIndexer> interface properties
         EventHandler<byte[]> IPipelineInput<byte[], MessageBuggerIndexer, TIndexer>.this[MessageBuggerIndexer index0, TIndexer index1]
         {
             get
             {
-                switch (index0)
-                {
-                    default:
-                    case MessageBuggerIndexer.Raw:
-                        return (object sender, byte[] message) => RawMessagesInput(sender, message, index1);
-                    case MessageBuggerIndexer.Splitted:
-                        return (object sender, byte[] message) => SplittedMessagesInput(sender, message, index1);
-                }
+                return (x, y) => (this as IPipelineInput<byte[], MessageBuggerIndexer, TIndexer>).Input(x as IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer>, y, index0, index1);
             }
         }
+        #endregion
 
+        #region IPipelineInput<MessageBuggerControl> interface properties
         event EventHandler<MessageBuggerControl> IPipelineOutput<MessageBuggerControl>.Output { add => ControlOutput += value; remove => ControlOutput -= value; }
+        #endregion
+
+        #region Private objects
+        private event EventHandler<MessageBuggerControl> ControlOutput;
+        private event Action<IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer>, byte[], MessageBuggerIndexer, TIndexer> Output;
 
         private BinarySerializer Serializer;
         private Dictionary<TIndexer, Dictionary<ulong, Dictionary<uint, byte[]>>> ID2Packet;
         private Dictionary<TIndexer, Dictionary<ulong, Header>> ID2Header;
         private Dictionary<TIndexer, EventHandler<byte[]>> SplittedMessagesOutput;
         private Dictionary<TIndexer, EventHandler<byte[]>> RawMessagesOutput;
-        private event EventHandler<MessageBuggerControl> ControlOutput;
+        #endregion
 
+        #region Public objects
         public uint PacketSize { get; set; }
+        #endregion
 
+        #region Constructors
         public MessageBugger(BinarySerializer serializer, uint packetsize)
         {
             ID2Packet = new Dictionary<TIndexer, Dictionary<ulong, Dictionary<uint, byte[]>>>();
@@ -118,15 +128,39 @@ namespace EmptyBox.Automation.Network
             }
             PacketSize = packetsize;
         }
+        #endregion
 
+        #region IPipelineInput<byte[], MessageBuggerIndexer, TIndexer> interface functions
+        void IPipelineInput<byte[], MessageBuggerIndexer, TIndexer>.Input(IPipelineOutput<byte[], MessageBuggerIndexer, TIndexer> sender, byte[] input, MessageBuggerIndexer index0, TIndexer index1)
+        {
+            switch (index0)
+            {
+                default:
+                case MessageBuggerIndexer.Raw:
+                    RawMessagesInput(sender, input, index1);
+                    break;
+                case MessageBuggerIndexer.Splitted:
+                    SplittedMessagesInput(sender, input, index1);
+                    break;
+            }
+        }
+        #endregion
 
+        #region IPipelineInput<MessageBuggerControl> interface functions
+        void IPipelineInput<MessageBuggerControl>.Input(object sender, MessageBuggerControl output)
+        {
+            throw new NotImplementedException();
+        }
+        #endregion
+
+        #region Private functions
         private void SplittedMessagesInput(object sender, byte[] message, TIndexer index)
         {
             Message packet = Serializer.Deserialize<Message>(message);
             switch (packet.ID)
             {
                 case PacketID.PacketWithoutHeader:
-                    RawMessagesOutput[index]?.Invoke(this, packet.Data);
+                    RawInvoker(packet.Data, index);
                     break;
                 case PacketID.Header:
                     Header header = Serializer.Deserialize<Header>(packet.Data);
@@ -178,7 +212,7 @@ namespace EmptyBox.Automation.Network
                     }
                     ID2Header[index].Remove(id);
                     ID2Packet[index].Remove(id);
-                    RawMessagesOutput[index]?.Invoke(this, pool.ToArray());
+                    RawInvoker(pool.ToArray(), index);
                 }
             }
         }
@@ -188,9 +222,8 @@ namespace EmptyBox.Automation.Network
             uint length = Serializer.GetLength(new Message());
             if (length + message.Length <= PacketSize)
             {
-                SplittedMessagesOutput[index]?.Invoke
-                (
-                    this,
+                SplittedInvoker
+                (                
                     Serializer.Serialize
                     (
                         new Message()
@@ -198,7 +231,8 @@ namespace EmptyBox.Automation.Network
                             ID = PacketID.PacketWithoutHeader,
                             Data = message
                         }
-                    )
+                    ),
+                    index
                 );
             }
             else
@@ -222,7 +256,7 @@ namespace EmptyBox.Automation.Network
                     header.Data = new byte[0];
                 }
                 head.Data = Serializer.Serialize(header);
-                SplittedMessagesOutput[index]?.Invoke(this, Serializer.Serialize(head));
+                SplittedInvoker(Serializer.Serialize(head), index);
                 for (uint i0 = 0; i0 < parts_count; i0++)
                 {
                     Message packet0 = new Message()
@@ -235,14 +269,22 @@ namespace EmptyBox.Automation.Network
                         })
                     };
                     pool = pool.Skip((int)packet_size);
-                    SplittedMessagesOutput[index]?.Invoke(this, Serializer.Serialize(packet0));
+                    SplittedInvoker(Serializer.Serialize(packet0), index);
                 }
             }
         }
 
-        void IPipelineInput<MessageBuggerControl>.Input(object sender, MessageBuggerControl output)
+        private void RawInvoker(byte[] message, TIndexer index)
         {
-            throw new NotImplementedException();
+            RawMessagesOutput[index]?.Invoke(this, message);
+            Output?.Invoke(this, message, MessageBuggerIndexer.Raw, index);
         }
+
+        private void SplittedInvoker(byte[] message, TIndexer index)
+        {
+            SplittedMessagesOutput[index]?.Invoke(this, message);
+            Output?.Invoke(this, message, MessageBuggerIndexer.Splitted, index);
+        }
+        #endregion
     }
 }

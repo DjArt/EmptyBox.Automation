@@ -5,20 +5,19 @@ using EmptyBox.IO.Network;
 
 namespace EmptyBox.Automation.Network
 {
-    public sealed class ConnectionSocketHandlerWorker : IPipelineInput<IConnectionListener>, IPipelineOutput<IConnection>
+    public sealed class ConnectionListenerWorker : IPipelineInput<IConnectionListener>, IPipelineOutput<IConnection>
     {
         event EventHandler<IConnection> IPipelineOutput<IConnection>.Output { add => Output += value; remove => Output -= value; }
 
         private List<IConnectionListener> Handlers;
         private event EventHandler<IConnection> Output;
 
-        public ConnectionSocketHandlerWorker()
+        public ConnectionListenerWorker()
         {
             Handlers = new List<IConnectionListener>();
         }
-
-
-        private async void Input(object sender, IConnectionListener output)
+        
+        public async void Input(object sender, IConnectionListener output)
         {
             Handlers.Add(output);
             output.ConnectionSocketReceived += Output_ConnectionSocketReceived;
@@ -32,11 +31,6 @@ namespace EmptyBox.Automation.Network
                     output.ConnectionSocketReceived -= Output_ConnectionSocketReceived;
                     break;
             }
-        }
-
-        void IPipelineInput<IConnectionListener>.Input(object sender, IConnectionListener output)
-        {
-            throw new NotImplementedException();
         }
 
         private void Output_ConnectionSocketReceived(IConnectionListener handler, IConnection socket)

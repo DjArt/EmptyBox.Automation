@@ -7,13 +7,16 @@ namespace EmptyBox.Automation
 {
     public sealed class Loadbalancer<TInput, TMarker> : IPipelineInput<TInput, TMarker>, IPipelineOutput<TInput, TMarker, uint>, IPipelineInput<LoadbalancerControlPacket<TMarker>>, IPipelineOutput<LoadbalancerStatePacket<TMarker>>
     {
-        internal sealed class Record
+        #region Private structs
+        private sealed class Record
         {
             public uint Ratio;
             public uint CurrentRatio;
             public EventHandler<TInput> Event;
         }
+        #endregion
 
+        #region IPipelineOutput<TInput, TMarker, uint> interface properties
         EventHandler<TInput> IPipelineOutput<TInput, TMarker, uint>.this[TMarker index0, uint index1]
         {
             get
@@ -26,25 +29,39 @@ namespace EmptyBox.Automation
             }
         }
 
+        event Action<IPipelineOutput<TInput, TMarker, uint>, TInput, TMarker, uint> IPipelineOutput<TInput, TMarker, uint>.Output { add => Output += value; remove => Output -= value; }
+        #endregion
+
+        #region IPipelineInput<TInput, TMarker> interface properties
         EventHandler<TInput> IPipelineInput<TInput, TMarker>.this[TMarker index]
         {
             get
             {
-                return (x, y) => Input(y, index);
+                return (x, y) => (this as IPipelineInput<TInput, TMarker>).Input(x as IPipelineOutput<TInput, TMarker>, y, index);
             }
         }
-        event EventHandler<LoadbalancerStatePacket<TMarker>> IPipelineOutput<LoadbalancerStatePacket<TMarker>>.Output { add => StateOutput += value; remove => StateOutput -= value; }
+        #endregion
 
+        #region IPipelineOutput<LoadbalancerStatePacket<TMarker>> interface properties
+        event EventHandler<LoadbalancerStatePacket<TMarker>> IPipelineOutput<LoadbalancerStatePacket<TMarker>>.Output { add => StateOutput += value; remove => StateOutput -= value; }
+        #endregion
+
+        #region Private objects
         private Dictionary<TMarker, Dictionary<uint, Record>> Events;
         private Random Random;
         private event EventHandler<LoadbalancerStatePacket<TMarker>> StateOutput;
+        private event Action<IPipelineOutput<TInput, TMarker, uint>, TInput, TMarker, uint> Output;
+        #endregion
 
+        #region Constructors
         public Loadbalancer()
         {
             Events = new Dictionary<TMarker, Dictionary<uint, Record>>();
             Random = new Random();
         }
+        #endregion
 
+        #region IPipelineInput<LoadbalancerControlPacket<TMarker>> interface functions
         void IPipelineInput<LoadbalancerControlPacket<TMarker>>.Input(object sender, LoadbalancerControlPacket<TMarker> output)
         {
             switch(output.Action)
@@ -109,8 +126,10 @@ namespace EmptyBox.Automation
                     break;
             }
         }
+        #endregion
 
-        private void Input(TInput output, TMarker marker)
+        #region IPipelineInput<TInput, TMarker> interface functions
+        void IPipelineInput<TInput, TMarker>.Input(IPipelineOutput<TInput, TMarker> sender, TInput input, TMarker marker)
         {
             List<uint> keys = Events[marker].Keys.Where(x => Events[marker][x].CurrentRatio > 0).ToList();
             uint key = keys[Random.Next(keys.Count())];
@@ -122,7 +141,15 @@ namespace EmptyBox.Automation
                     r.CurrentRatio = r.Ratio;
                 }
             }
-            Events[marker][key].Event?.Invoke(this, output);
         }
+        #endregion
+
+        #region Private functions
+        private void EventCaller(TMarker marker, uint key, TInput input)
+        {
+            Events[marker][key].Event?.Invoke(this, input);
+            Output?.Invoke(this, input, marker, key);
+        }
+        #endregion
     }
 }

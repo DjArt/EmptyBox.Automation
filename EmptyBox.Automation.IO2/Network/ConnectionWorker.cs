@@ -4,7 +4,7 @@ using EmptyBox.IO.Network;
 
 namespace EmptyBox.Automation.Network
 {
-    public class ConnectionSocketWorker : IPipelineInput<IConnection>, IPipelineOutput<byte[], IAccessPoint>, IPipelineInput<byte[], IAccessPoint>
+    public class ConnectionWorker : IPipelineInput<IConnection>, IPipelineOutput<byte[], IAccessPoint>, IPipelineInput<byte[], IAccessPoint>
     {
         EventHandler<byte[]> IPipelineOutput<byte[], IAccessPoint>.this[IAccessPoint index]
         {
@@ -26,7 +26,7 @@ namespace EmptyBox.Automation.Network
         private List<IConnection> Sockets;
         private Dictionary<IAccessPoint, EventHandler<byte[]>> Events;
 
-        public ConnectionSocketWorker()
+        public ConnectionWorker()
         {
             Sockets = new List<IConnection>();
             Events = new Dictionary<IAccessPoint, EventHandler<byte[]>>();

@@ -44,6 +44,22 @@ namespace EmptyBox.Automation
         {
             pipelineOutput[outputIndex] -= pipelineInput[inputIndex];
         }
+        public static void LinkAllOutput<TElement, TIndex>(this IPipelineOutput<TElement, TIndex> pipelineOutput, IPipelineInput<TElement, TIndex> pipelineInput)
+        {
+            pipelineOutput.Output += pipelineInput.Input;
+        }
+        public static void UnlinkAllOutput<TElement, TIndex>(this IPipelineOutput<TElement, TIndex> pipelineOutput, IPipelineInput<TElement, TIndex> pipelineInput)
+        {
+            pipelineOutput.Output -= pipelineInput.Input;
+        }
+        public static void LinkAllInput<TElement, TIndex>(this IPipelineInput<TElement, TIndex> pipelineInput, IPipelineOutput<TElement, TIndex> pipelineOutput)
+        {
+            pipelineOutput.Output += pipelineInput.Input;
+        }
+        public static void UnlinkAllInput<TElement, TIndex>(this IPipelineInput<TElement, TIndex> pipelineInput, IPipelineOutput<TElement, TIndex> pipelineOutput)
+        {
+            pipelineOutput.Output -= pipelineInput.Input;
+        }
         #endregion
 
         #region IPipeline<>
@@ -169,5 +185,10 @@ namespace EmptyBox.Automation
             pipelineOutput[outputIndex] -= pipelineInput.Input;
         }
         #endregion
+
+        public static void Warp<TElement, TOutputIndex, TInputIndex>(this IPipelineOutput<TElement, TOutputIndex> pipelineOutput, TOutputIndex outputIndex, IPipelineInput<TElement, TInputIndex> pipelineInput, TInputIndex inputIndex)
+        {
+            pipelineOutput[outputIndex] += pipelineInput[inputIndex];
+        }
     }
 }

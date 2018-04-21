@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>0.0.0.10</Version>
+    <Authors>Dj Art</Authors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="IPipeline.fs" />
+    <Compile Include="Pipeline.fs" />
+    <Compile Include="ExternalInput.fs" />
+    <Compile Include="ExternalOutput.fs" />
+    <Compile Include="Buffer.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.3.4" />
+  </ItemGroup>
+
+</Project>
