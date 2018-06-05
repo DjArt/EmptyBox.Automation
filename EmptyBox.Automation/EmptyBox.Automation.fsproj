@@ -3,8 +3,12 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.0.0.10</Version>
+    <Version>1.0.0.0</Version>
     <Authors>Dj Art</Authors>
+    <PackageProjectUrl>https://github.com/DjArt/EmptyBox.Automation</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DjArt/EmptyBox.Automation</RepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+    <PackageTags>Pipeline, Automation</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
