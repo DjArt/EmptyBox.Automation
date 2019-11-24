@@ -31,6 +31,7 @@ namespace EmptyBox.Automation.Tests
         {
             TestAction a0 = new TestAction(500);
             TestAction a1 = new TestAction(1000);
+            Filter<string> f0 = new Filter<string>(x => x.Contains('0'));
             ExternalInput<string> input = new ExternalInput<string>();
             ExternalOutput<string> output = new ExternalOutput<string>((sender, x) => Console.WriteLine(x));
             object k = null;
@@ -42,8 +43,8 @@ namespace EmptyBox.Automation.Tests
             }
             k = input > !a0;
             k = input > !a1;
-            k = input >> a0;
-            k = input >> a1;
+            k = input >> f0 >> a0;
+            k = input >> f0 >> a1;
             for (int i0 = 0; i0 < 4; i0++)
             {
                 input.Send(Console.ReadLine());
