@@ -17,6 +17,7 @@
     <Compile Include="ExternalInput.fs" />
     <Compile Include="ExternalOutput.fs" />
     <Compile Include="Buffer.fs" />
+    <Compile Include="Filter.fs" />
   </ItemGroup>
 
   <ItemGroup>
